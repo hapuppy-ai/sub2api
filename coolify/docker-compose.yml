@@ -1,0 +1,128 @@
+services:
+  sub2api:
+    image: weishaw/sub2api:0.1.163
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 60s
+    expose:
+      - "8080"
+    volumes:
+      - sub2api_data:/app/data
+    environment:
+      AUTO_SETUP: "true"
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "8080"
+      SERVER_MODE: release
+      RUN_MODE: standard
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_USER: sub2api
+      DATABASE_PASSWORD: ${SERVICE_PASSWORD_64_POSTGRES}
+      DATABASE_DBNAME: sub2api
+      DATABASE_SSLMODE: disable
+      DATABASE_MAX_OPEN_CONNS: "40"
+      DATABASE_MAX_IDLE_CONNS: "10"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${SERVICE_PASSWORD_64_REDIS}
+      REDIS_DB: "0"
+      REDIS_POOL_SIZE: "256"
+      REDIS_MIN_IDLE_CONNS: "10"
+      REDIS_ENABLE_TLS: "false"
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL is required}
+      ADMIN_PASSWORD: ${SERVICE_PASSWORD_ADMIN}
+      JWT_SECRET: ${SERVICE_HEX_64_JWT}
+      JWT_EXPIRE_HOUR: "24"
+      TOTP_ENCRYPTION_KEY: ${SERVICE_HEX_64_TOTP}
+      TZ: Asia/Shanghai
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    deploy:
+      resources:
+        limits:
+          cpus: "1.50"
+          memory: 2G
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    stop_grace_period: 60s
+    shm_size: 256mb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      POSTGRES_USER: sub2api
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_64_POSTGRES}
+      POSTGRES_DB: sub2api
+      TZ: Asia/Shanghai
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sub2api -d sub2api"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 2G
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    stop_grace_period: 30s
+    volumes:
+      - redis_data:/data
+    environment:
+      REDIS_PASSWORD: ${SERVICE_PASSWORD_64_REDIS}
+      REDISCLI_AUTH: ${SERVICE_PASSWORD_64_REDIS}
+      TZ: Asia/Shanghai
+    command:
+      - /bin/sh
+      - -c
+      - exec redis-server --save 60 1 --appendonly yes --appendfsync everysec --requirepass "$$REDIS_PASSWORD"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+
+volumes:
+  sub2api_data:
+  postgres_data:
+  redis_data:
