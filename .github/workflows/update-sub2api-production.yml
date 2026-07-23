@@ -1,0 +1,76 @@
+name: Update production Sub2API image
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-production-sub2api-image
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.repository == 'hapuppy-ai/sub2api'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Resolve latest stable release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh api repos/Wei-Shaw/sub2api/releases/latest --jq .tag_name)"
+          version="${tag#v}"
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unexpected upstream release tag: $tag" >&2
+            exit 1
+          fi
+
+          current="$(sed -nE 's#^[[:space:]]*image: weishaw/sub2api:([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]*$#\1#p' coolify/docker-compose.yml)"
+          if [[ ! "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unable to read the pinned production version" >&2
+            exit 1
+          fi
+
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Stop when production is current
+        if: steps.release.outputs.current == steps.release.outputs.latest
+        run: echo "Production already pins Sub2API ${{ steps.release.outputs.current }}"
+
+      - name: Create upgrade pull request
+        if: steps.release.outputs.current != steps.release.outputs.latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT: ${{ steps.release.outputs.current }}
+          LATEST: ${{ steps.release.outputs.latest }}
+        run: |
+          branch="automation/sub2api-${LATEST}"
+
+          if [[ "$(gh pr list --state all --head "$branch" --json number --jq length)" != "0" ]]; then
+            echo "An upgrade pull request for $LATEST already exists"
+            exit 0
+          fi
+
+          sed -i "s#weishaw/sub2api:${CURRENT}#weishaw/sub2api:${LATEST}#" coolify/docker-compose.yml
+          git switch -c "$branch"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coolify/docker-compose.yml
+          git commit -m "chore(deploy): update Sub2API to ${LATEST}"
+          git push --set-upstream origin "$branch"
+
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "chore(deploy): update Sub2API to ${LATEST}" \
+            --body "Updates the production image from \`${CURRENT}\` to \`${LATEST}\`.\n\nUpstream release: https://github.com/Wei-Shaw/sub2api/releases/tag/v${LATEST}\n\nBefore merging, review the release notes and confirm that a current PostgreSQL backup exists."
