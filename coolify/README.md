@@ -16,6 +16,21 @@ Set the Sub2API domain in Coolify with the internal port suffix, for example
 `https://ops.hapuppy.com:8080`. Coolify terminates public HTTPS on port 443.
 Do not publish PostgreSQL or Redis domains or ports.
 
+## Resource profile
+
+The production Compose file is tuned for the current dedicated 4 vCPU / 8 GB
+VPS. Container limits are ceilings rather than reservations:
+
+- Sub2API: 2.5 vCPU / 3500 MB, 80 database connections, 512 Redis connections
+- PostgreSQL: 1 vCPU / 2 GB
+- Redis: 0.5 vCPU / 768 MB
+
+The remaining memory is reserved for Ubuntu, Coolify, the reverse proxy, and
+filesystem cache. Image generation has a separate eight-request concurrency
+limit because large request and response bodies have a different memory profile
+from text streaming. Re-run staged load tests before raising these limits or
+moving the stack to a larger VPS.
+
 ## Environment
 
 Set `ADMIN_EMAIL` in Coolify before the first deployment. Coolify generates the

@@ -20,20 +20,26 @@ services:
       DATABASE_PASSWORD: ${SERVICE_PASSWORD_64_POSTGRES}
       DATABASE_DBNAME: sub2api
       DATABASE_SSLMODE: disable
-      DATABASE_MAX_OPEN_CONNS: "40"
-      DATABASE_MAX_IDLE_CONNS: "10"
+      DATABASE_MAX_OPEN_CONNS: "80"
+      DATABASE_MAX_IDLE_CONNS: "40"
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${SERVICE_PASSWORD_64_REDIS}
       REDIS_DB: "0"
-      REDIS_POOL_SIZE: "256"
-      REDIS_MIN_IDLE_CONNS: "10"
+      REDIS_POOL_SIZE: "512"
+      REDIS_MIN_IDLE_CONNS: "32"
       REDIS_ENABLE_TLS: "false"
+      GATEWAY_IMAGE_CONCURRENCY_ENABLED: "true"
+      GATEWAY_IMAGE_CONCURRENCY_MAX_CONCURRENT_REQUESTS: "8"
+      GATEWAY_IMAGE_CONCURRENCY_OVERFLOW_MODE: reject
+      GATEWAY_IMAGE_CONCURRENCY_WAIT_TIMEOUT_SECONDS: "30"
+      GATEWAY_IMAGE_CONCURRENCY_MAX_WAITING_REQUESTS: "50"
       ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL is required}
       ADMIN_PASSWORD: ${SERVICE_PASSWORD_ADMIN}
       JWT_SECRET: ${SERVICE_HEX_64_JWT}
       JWT_EXPIRE_HOUR: "24"
       TOTP_ENCRYPTION_KEY: ${SERVICE_HEX_64_TOTP}
+      GOMEMLIMIT: 3GiB
       TZ: Asia/Shanghai
     depends_on:
       postgres:
@@ -53,8 +59,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.50"
-          memory: 2G
+          cpus: "2.50"
+          memory: 3500M
     logging:
       driver: json-file
       options:
@@ -115,7 +121,7 @@ services:
       resources:
         limits:
           cpus: "0.50"
-          memory: 1G
+          memory: 768M
     logging:
       driver: json-file
       options:
